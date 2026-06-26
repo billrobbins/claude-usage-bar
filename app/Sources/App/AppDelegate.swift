@@ -116,7 +116,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, MenuBarIconUpdating {
             statusSummary: statusManager.effective == "none"
                 ? "All Claude services operational" : statusManager.statusDescription,
             lastUpdated: usageManager.lastUpdated)
-        try? SnapshotStore.write(snapshot)
+        _ = try? SnapshotStore.write(snapshot)
         #if canImport(WidgetKit)
         WidgetCenter.shared.reloadAllTimelines()   // no-op until a Phase-2 widget exists
         #endif
