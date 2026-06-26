@@ -4,4 +4,5 @@ import Foundation
 testSeverity()
 testResetFormatting()
 testUsageParsing()
+testSnapshotRoundTrip()
 T.finish()
