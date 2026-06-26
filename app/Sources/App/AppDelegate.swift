@@ -1,7 +1,15 @@
 import AppKit
+import SwiftUI
+#if canImport(WidgetKit)
+import WidgetKit
+#endif
 
 final class AppDelegate: NSObject, NSApplicationDelegate, MenuBarIconUpdating {
     private var statusItem: NSStatusItem!
+    private var popover: NSPopover!
+    private var eventMonitor: Any?
+    private let settingsWindow = SettingsWindowController()
+
     let usageManager = UsageManager()
     let statusManager = StatusManager()
 
@@ -9,11 +17,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate, MenuBarIconUpdating {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = statusItem.button {
             button.target = self
-            button.action = #selector(quit)
+            button.action = #selector(handleClick)
+            button.sendAction(on: [.leftMouseUp, .rightMouseUp])
         }
         usageManager.iconDelegate = self
         updateStatusIcon(sessionPercent: 0)
+
+        popover = NSPopover()
+        popover.behavior = .transient
+        popover.contentViewController = NSHostingController(rootView: PopoverView(
+            usage: usageManager,
+            status: statusManager,
+            onRefresh: { [weak self] in self?.refresh() },
+            onOpenSettings: { [weak self] in self?.openSettings() }
+        ))
+
+        usageManager.onUpdate = { [weak self] in self?.persistSnapshot() }
+        statusManager.onUpdate = { [weak self] in self?.persistSnapshot() }
+
         NotificationService.requestAuthorization()
+        refresh()
+
+        Timer.scheduledTimer(withTimeInterval: 300, repeats: true) { [weak self] _ in
+            self?.refresh()
+        }
+    }
+
+    // MARK: Actions
+
+    private func refresh() {
         usageManager.fetchUsage()
         statusManager.fetch()
     }
@@ -24,5 +56,69 @@ final class AppDelegate: NSObject, NSApplicationDelegate, MenuBarIconUpdating {
         button.title = " \(sessionPercent)%"
     }
 
+    @objc private func handleClick() {
+        guard let event = NSApp.currentEvent else { return }
+        if event.type == .rightMouseUp {
+            let menu = NSMenu()
+            menu.addItem(NSMenuItem(title: "Refresh", action: #selector(refreshFromMenu), keyEquivalent: ""))
+            menu.addItem(NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ""))
+            menu.addItem(.separator())
+            menu.addItem(NSMenuItem(title: "Quit Claude Usage", action: #selector(quit), keyEquivalent: "q"))
+            statusItem.menu = menu
+            statusItem.button?.performClick(nil)
+            statusItem.menu = nil
+        } else {
+            togglePopover()
+        }
+    }
+
+    @objc private func refreshFromMenu() { refresh() }
+
+    private func togglePopover() {
+        if popover.isShown { closePopover() } else { openPopover() }
+    }
+
+    private func openPopover() {
+        guard let button = statusItem.button else { return }
+        popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+        eventMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
+            self?.closePopover()
+        }
+    }
+
+    private func closePopover() {
+        popover.performClose(nil)
+        if let monitor = eventMonitor { NSEvent.removeMonitor(monitor); eventMonitor = nil }
+    }
+
+    @objc private func openSettings() {
+        closePopover()
+        settingsWindow.show(usage: usageManager, status: statusManager)
+    }
+
     @objc private func quit() { NSApplication.shared.terminate(nil) }
+
+    // MARK: Snapshot (widget seam)
+
+    private func persistSnapshot() {
+        let snapshot = UsageSnapshot(
+            session: LimitSnapshot(utilization: usageManager.sessionUtil,
+                                   resetsAt: usageManager.sessionResetsAt,
+                                   hasData: usageManager.hasFetchedData),
+            weekly: LimitSnapshot(utilization: usageManager.weeklyUtil,
+                                  resetsAt: usageManager.weeklyResetsAt,
+                                  hasData: usageManager.hasFetchedData),
+            weeklySonnet: usageManager.hasSonnet
+                ? LimitSnapshot(utilization: usageManager.sonnetUtil,
+                                resetsAt: usageManager.sonnetResetsAt, hasData: true)
+                : nil,
+            statusIndicator: statusManager.effective,
+            statusSummary: statusManager.effective == "none"
+                ? "All Claude services operational" : statusManager.statusDescription,
+            lastUpdated: usageManager.lastUpdated)
+        try? SnapshotStore.write(snapshot)
+        #if canImport(WidgetKit)
+        WidgetCenter.shared.reloadAllTimelines()   // no-op until a Phase-2 widget exists
+        #endif
+    }
 }
