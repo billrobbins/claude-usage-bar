@@ -2,6 +2,7 @@ import AppKit
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
+    let usageManager = UsageManager()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -11,6 +12,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             button.target = self
             button.action = #selector(quit)
         }
+        NotificationService.requestAuthorization()
+        usageManager.fetchUsage()
     }
 
     @objc private func quit() { NSApplication.shared.terminate(nil) }
