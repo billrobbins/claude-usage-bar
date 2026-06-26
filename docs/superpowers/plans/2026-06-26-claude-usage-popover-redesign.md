@@ -212,9 +212,8 @@ T.finish()
 set -euo pipefail
 cd "$(dirname "$0")"
 mkdir -p build
-# Core files are Foundation-only, but UsageSnapshot.swift references WidgetCenter
-# behind #if canImport(WidgetKit), so link WidgetKit for the test runner too.
-swiftc -o build/test_runner app/Sources/Core/*.swift tests/*.swift -framework WidgetKit
+# Core/ is Foundation-only — no extra frameworks needed for the test runner.
+swiftc -o build/test_runner app/Sources/Core/*.swift tests/*.swift
 ./build/test_runner
 ```
 
@@ -565,9 +564,6 @@ T.finish()
 
 ```swift
 import Foundation
-#if canImport(WidgetKit)
-import WidgetKit
-#endif
 
 struct LimitSnapshot: Codable, Equatable {
     var utilization: Int
@@ -611,9 +607,6 @@ enum SnapshotStore {
         try FileManager.default.createDirectory(at: directoryURL,
                                                 withIntermediateDirectories: true)
         try encode(snapshot).write(to: fileURL, options: .atomic)
-        #if canImport(WidgetKit)
-        WidgetCenter.shared.reloadAllTimelines()
-        #endif
         return fileURL
     }
 
@@ -624,9 +617,9 @@ enum SnapshotStore {
 }
 ```
 
-Note: `import WidgetKit` is guarded by `#if canImport(WidgetKit)` (true on macOS). `run-tests.sh` already links `-framework WidgetKit` (added in Task 1), so the test build resolves `WidgetCenter`.
+Note: `SnapshotStore` is pure file IO and Foundation-only — it does **not** import WidgetKit. The `WidgetCenter` reload (the widget-refresh ping) lives in the app layer (`AppDelegate.persistSnapshot`, Task 15), keeping `Core/` test-runner-clean.
 
-- [ ] **Step 5: Run to verify it passes** — `./run-tests.sh` → `18/18 passed`. (`run-tests.sh` already links `-framework WidgetKit`.)
+- [ ] **Step 5: Run to verify it passes** — `./run-tests.sh` → `18/18 passed`.
 
 - [ ] **Step 6: Commit**
 
@@ -2036,6 +2029,9 @@ Claude-Session: https://claude.ai/code/session_01QzZeB4uDJg9nJev5afUoU1"
 ```swift
 import AppKit
 import SwiftUI
+#if canImport(WidgetKit)
+import WidgetKit
+#endif
 
 final class AppDelegate: NSObject, NSApplicationDelegate, MenuBarIconUpdating {
     private var statusItem: NSStatusItem!
@@ -2150,6 +2146,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, MenuBarIconUpdating {
                 ? "All Claude services operational" : statusManager.statusDescription,
             lastUpdated: usageManager.lastUpdated)
         try? SnapshotStore.write(snapshot)
+        #if canImport(WidgetKit)
+        WidgetCenter.shared.reloadAllTimelines()   // no-op until a Phase-2 widget exists
+        #endif
     }
 }
 ```
