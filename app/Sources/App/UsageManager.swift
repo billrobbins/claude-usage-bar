@@ -81,7 +81,7 @@ final class UsageManager: ObservableObject {
         }
         guard let url = URL(string: "https://claude.ai/api/bootstrap") else { completion(nil); return }
         var request = URLRequest(url: url)
-        request.setValue("sessionKey=\(cookie)", forHTTPHeaderField: "Cookie")
+        request.setValue(cookie, forHTTPHeaderField: "Cookie")
         URLSession.shared.dataTask(with: request) { data, _, _ in
             guard let data = data,
                   let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
