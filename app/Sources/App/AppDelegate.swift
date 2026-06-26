@@ -4,7 +4,7 @@ import SwiftUI
 import WidgetKit
 #endif
 
-final class AppDelegate: NSObject, NSApplicationDelegate, MenuBarIconUpdating {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, MenuBarIconUpdating {
     private var statusItem: NSStatusItem!
     private var popover: NSPopover!
     private var eventMonitor: Any?
@@ -25,6 +25,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, MenuBarIconUpdating {
 
         popover = NSPopover()
         popover.behavior = .transient
+        popover.delegate = self
         popover.contentViewController = NSHostingController(rootView: PopoverView(
             usage: usageManager,
             status: statusManager,
@@ -81,8 +82,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, MenuBarIconUpdating {
     private func openPopover() {
         guard let button = statusItem.button else { return }
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
-        eventMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
-            self?.closePopover()
+        if eventMonitor == nil {
+            eventMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
+                self?.closePopover()
+            }
+        }
+    }
+
+    func popoverDidClose(_ notification: Notification) {
+        if let monitor = eventMonitor {
+            NSEvent.removeMonitor(monitor)
+            eventMonitor = nil
         }
     }
 

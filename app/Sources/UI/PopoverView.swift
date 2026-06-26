@@ -57,7 +57,7 @@ struct PopoverView: View {
             usageRow(title: "Session", pill: "5h", util: usage.sessionUtil,
                      resets: usage.sessionResetsAt, includeDate: false)
             usageRow(title: "Weekly", pill: "7d", util: usage.weeklyUtil,
-                     resets: usage.weeklyResetsAt, includeDate: true)
+                     resets: usage.weeklyResetsAt, includeDate: true, lastRow: !usage.hasSonnet)
             if usage.hasSonnet {
                 usageRow(title: "Weekly · Sonnet", pill: nil, util: usage.sonnetUtil,
                          resets: usage.sonnetResetsAt, includeDate: true, lastRow: true)
@@ -116,20 +116,32 @@ struct PopoverView: View {
     }
 
     // MARK: Empty state
+    private var emptyStateMessage: String {
+        if let error = usage.errorMessage { return error }
+        if usage.hasCookie { return "Loading your usage…" }
+        return "Set your session cookie to see your usage."
+    }
+
+    private var showSettingsButton: Bool {
+        usage.errorMessage != nil || !usage.hasCookie
+    }
+
     private var emptyState: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(usage.errorMessage ?? "Set your session cookie to see your usage.")
+            Text(emptyStateMessage)
                 .font(.system(size: 13))
                 .foregroundStyle(p.secondaryText)
                 .fixedSize(horizontal: false, vertical: true)
-            Button(action: onOpenSettings) {
-                Text("Open Settings")
-                    .font(.system(size: 12.5, weight: .medium))
-                    .foregroundStyle(p.refreshAccent)
-                    .padding(.horizontal, 11).padding(.vertical, 5)
-                    .background(RoundedRectangle(cornerRadius: 7).fill(p.footerPillBg))
+            if showSettingsButton {
+                Button(action: onOpenSettings) {
+                    Text("Open Settings")
+                        .font(.system(size: 12.5, weight: .medium))
+                        .foregroundStyle(p.refreshAccent)
+                        .padding(.horizontal, 11).padding(.vertical, 5)
+                        .background(RoundedRectangle(cornerRadius: 7).fill(p.footerPillBg))
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
         }
         .padding(.horizontal, 16).padding(.vertical, 12)
     }

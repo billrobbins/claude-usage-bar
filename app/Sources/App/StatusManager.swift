@@ -63,7 +63,14 @@ final class StatusManager: ObservableObject {
         affected = parsed.affected
         if !parsed.components.isEmpty {
             allComponents = parsed.components
-            if UserDefaults.standard.array(forKey: "tracked_component_ids") == nil {
+            let realIds = Set(parsed.components.map { $0.id })
+            let neverConfigured = UserDefaults.standard.array(forKey: "tracked_component_ids") == nil
+            // If a previously-saved selection is non-empty but shares no IDs with the
+            // real components (e.g. placeholder IDs persisted before the first fetch,
+            // or status.com changed its IDs), re-seed defaults. An empty selection is
+            // a deliberate "track nothing" choice and is left alone.
+            let savedIsStale = !selectedComponentIds.isEmpty && selectedComponentIds.isDisjoint(with: realIds)
+            if neverConfigured || savedIsStale {
                 let defaults = parsed.components
                     .filter { !$0.name.localizedCaseInsensitiveContains("Government") }
                     .map { $0.id }
