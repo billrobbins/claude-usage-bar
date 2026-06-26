@@ -26,12 +26,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, Men
         popover = NSPopover()
         popover.behavior = .transient
         popover.delegate = self
-        popover.contentViewController = NSHostingController(rootView: PopoverView(
+        let hosting = NSHostingController(rootView: PopoverView(
             usage: usageManager,
             status: statusManager,
             onRefresh: { [weak self] in self?.refresh() },
             onOpenSettings: { [weak self] in self?.openSettings() }
         ))
+        hosting.sizingOptions = .preferredContentSize
+        popover.contentViewController = hosting
 
         usageManager.onUpdate = { [weak self] in self?.persistSnapshot() }
         statusManager.onUpdate = { [weak self] in self?.persistSnapshot() }
