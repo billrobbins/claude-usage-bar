@@ -10,6 +10,7 @@ Based on [Artzainnn/ClaudeUsageBar](https://github.com/Artzainnn/ClaudeUsageBar)
 ## What it shows
 
 - **Session (5 h)** · **Weekly (7 d)** · **Weekly · Sonnet** usage meters with severity colors (green → amber → red at 70 / 90 %)
+- **Pace vs. time** — a tick on each meter marks how much of the window has elapsed, with a caption like `26% of week elapsed · 1.3× pace`; the pace figure turns amber at ≥ 1.25× and red at ≥ 2×
 - **Claude service status** pulled from the status page (operational / minor / major / critical)
 - **Threshold notifications** when usage crosses 25 / 50 / 75 / 90 %
 - Menu-bar asterisk color reflects current session severity at a glance
@@ -50,7 +51,7 @@ bash app/build.sh --no-open
 ./run-tests.sh
 ```
 
-Runs the Foundation-only Core unit tests (no simulator / Xcode required). Expected: `44/44 passed`.
+Runs the Foundation-only Core unit tests (no simulator / Xcode required). Expected: `63/63 passed`.
 
 ---
 
