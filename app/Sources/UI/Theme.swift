@@ -19,6 +19,7 @@ struct Palette {
     var primaryText: Color   { isDark ? Color(hex: "f5f5f7") : Color(hex: "1d1d1f") }
     var secondaryText: Color { isDark ? Color(hex: "ebebf5", alpha: 0.55) : Color(hex: "3c3c43", alpha: 0.55) }
     var faintText: Color     { isDark ? Color(hex: "ebebf5", alpha: 0.50) : Color(hex: "3c3c43", alpha: 0.50) }
+    var captionText: Color   { isDark ? Color(hex: "ebebf5", alpha: 0.72) : Color(hex: "3c3c43", alpha: 0.62) }
     var liveText: Color      { isDark ? Color(hex: "ebebf5", alpha: 0.45) : Color(hex: "3c3c43", alpha: 0.40) }
 
     var sparkStroke: Color   { isDark ? Color(hex: "e0855f") : Color(hex: "c2613c") }

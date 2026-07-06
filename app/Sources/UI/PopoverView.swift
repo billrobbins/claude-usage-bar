@@ -11,6 +11,12 @@ struct PopoverView: View {
     @State private var hoverSettings = false
     @State private var now = Date()
 
+    /// Keeps `now` current while the popover is alive. The popover reuses a single
+    /// hosting controller, so `.onAppear` fires only once (at launch) and never again
+    /// on later opens — without this tick, `now` freezes at launch time. A 7-day window
+    /// barely notices, but the 5-hour session pace then reads wildly wrong (often 0%).
+    private let ticker = Timer.publish(every: 30, on: .main, in: .common).autoconnect()
+
     private var p: Palette { Palette.current(scheme) }
 
     var body: some View {
@@ -22,13 +28,12 @@ struct PopoverView: View {
                 emptyState
             }
             divider
-            statusRow
-            divider
             footer
         }
         .frame(width: 300)
         .background(scheme == .dark ? Color(hex: "242228", alpha: 0.55) : Color(hex: "fafafc", alpha: 0.55))
         .onAppear { now = Date() }
+        .onReceive(ticker) { now = $0 }
     }
 
     // MARK: Header
@@ -94,7 +99,7 @@ struct PopoverView: View {
                 if let resets = resets {
                     Text("resets \(formattedReset(resets, includeDate: includeDate))")
                         .font(.system(size: 12.5))
-                        .foregroundStyle(p.secondaryText)
+                        .foregroundStyle(p.captionText)
                 }
             }
             HStack(spacing: 12) {
@@ -139,12 +144,12 @@ struct PopoverView: View {
     private func paceCaption(_ pace: PaceInfo, noun: String) -> some View {
         HStack(spacing: 0) {
             Text("\(pace.elapsedPercent)% of \(noun) elapsed")
-                .foregroundStyle(p.faintText)
+                .foregroundStyle(p.captionText)
             if let ratio = pace.paceRatio {
-                Text(" · ").foregroundStyle(p.faintText)
+                Text(" · ").foregroundStyle(p.captionText)
                 Text("\(formattedPace(ratio)) pace")
                     .foregroundStyle(paceSeverity(ratio)
-                        .map { SeverityStyle.textColor($0, isDark: p.isDark) } ?? p.faintText)
+                        .map { SeverityStyle.textColor($0, isDark: p.isDark) } ?? p.captionText)
             }
         }
         .font(.system(size: 11.5))
@@ -181,34 +186,44 @@ struct PopoverView: View {
         .padding(.horizontal, 16).padding(.vertical, 12)
     }
 
-    // MARK: Status
-    private var statusRow: some View {
-        let isOperational = status.effective == "none"
-        return HStack(alignment: .top, spacing: 9) {
-            Circle()
-                .fill(isOperational ? p.operationalDot : statusDotColor(status.effective))
-                .frame(width: 8, height: 8)
-                .padding(.top, 4)
-                .shadow(color: (p.isDark && isOperational) ? Color(hex: "59d499", alpha: 0.6) : .clear, radius: 4)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(isOperational ? "All Claude services operational" : status.statusDescription)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(p.primaryText)
-                    .fixedSize(horizontal: false, vertical: true)
-                Text(status.hasFetched ? status.contextLine(now: Date()) : "Checking status…")
-                    .font(.system(size: 11.5))
-                    .foregroundStyle(p.faintText)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Spacer()
+    // MARK: Status (compact footer indicator)
+    private var statusIsOperational: Bool { status.effective == "none" }
+
+    /// SF Symbol whose shape escalates with severity; a muted glyph until the first fetch.
+    private var statusSymbol: String {
+        guard status.hasFetched else { return "ellipsis.circle" }
+        switch status.effective {
+        case "minor":    return "exclamationmark.circle.fill"
+        case "major":    return "exclamationmark.triangle.fill"
+        case "critical": return "exclamationmark.octagon.fill"
+        default:         return "checkmark.circle.fill"
         }
-        .padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 10)
-        .contentShape(Rectangle())
-        .onTapGesture {
-            if !isOperational, let url = URL(string: "https://status.claude.com") {
-                NSWorkspace.shared.open(url)
+    }
+
+    private var statusColor: Color {
+        guard status.hasFetched else { return p.faintText }
+        return statusIsOperational ? p.operationalDot : statusDotColor(status.effective)
+    }
+
+    private var statusTooltip: String {
+        guard status.hasFetched else { return "Checking status…" }
+        let head = statusIsOperational ? "All Claude services operational" : status.statusDescription
+        return "\(head) · \(status.contextLine(now: now))"
+    }
+
+    private var statusIndicator: some View {
+        Image(systemName: statusSymbol)
+            .font(.system(size: 13.5, weight: .semibold))
+            .foregroundStyle(statusColor)
+            .frame(width: 22, height: 26)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                if let url = URL(string: "https://status.claude.com") {
+                    NSWorkspace.shared.open(url)
+                }
             }
-        }
+            .accessibilityLabel("Claude status")
+            .help(statusTooltip)
     }
 
     private func statusDotColor(_ indicator: String) -> Color {
@@ -227,25 +242,31 @@ struct PopoverView: View {
                 .font(.system(size: 12.5))
                 .foregroundStyle(p.faintText)
             Spacer()
-            HStack(spacing: 7) {
-                pill(label: "↻ Refresh", color: p.refreshAccent, hovering: hoverRefresh) { onRefresh() }
+            HStack(spacing: 8) {
+                statusIndicator
+                iconPill(systemName: "arrow.clockwise", color: p.refreshAccent,
+                         hovering: hoverRefresh, label: "Refresh") { onRefresh() }
                     .onHover { hoverRefresh = $0 }
-                pill(label: "Settings", color: p.primaryText, hovering: hoverSettings) { onOpenSettings() }
+                iconPill(systemName: "gearshape", color: p.secondaryText,
+                         hovering: hoverSettings, label: "Settings") { onOpenSettings() }
                     .onHover { hoverSettings = $0 }
             }
         }
         .padding(.horizontal, 14).padding(.top, 10).padding(.bottom, 12)
     }
 
-    private func pill(label: String, color: Color, hovering: Bool, action: @escaping () -> Void) -> some View {
+    private func iconPill(systemName: String, color: Color, hovering: Bool,
+                          label: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Text(label)
-                .font(.system(size: 12.5, weight: .medium))
+            Image(systemName: systemName)
+                .font(.system(size: 12.5, weight: .semibold))
                 .foregroundStyle(color)
-                .padding(.horizontal, 11).padding(.vertical, 5)
+                .frame(width: 30, height: 26)
                 .background(RoundedRectangle(cornerRadius: 7).fill(hovering ? p.footerPillHover : p.footerPillBg))
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(label)
+        .help(label)
     }
 
     private var divider: some View {
