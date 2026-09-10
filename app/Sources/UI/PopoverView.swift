@@ -24,6 +24,7 @@ struct PopoverView: View {
             header
             if usage.hasFetchedData {
                 usageRows
+                weekPositionCard
             } else {
                 emptyState
             }
@@ -153,6 +154,41 @@ struct PopoverView: View {
             }
         }
         .font(.system(size: 11.5))
+    }
+
+    // MARK: Week position
+    /// Translates the weekly percentage into a clock time inside the reset window, so
+    /// "93% of the week" reads as "you've spent the week up to Friday 6:14 AM". The lead
+    /// is red when usage runs ahead of the clock, green when it lags behind.
+    @ViewBuilder
+    private var weekPositionCard: some View {
+        if let pos = windowPosition(utilization: usage.weeklyUtil,
+                                    resetsAt: usage.weeklyResetsAt,
+                                    window: UsageWindow.weekly, now: now) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text("WEEK POSITION")
+                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                    .tracking(0.6)
+                    .foregroundStyle(p.faintText)
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(formattedWindowClock(pos.usageDate))
+                        .font(.system(size: 17, weight: .semibold))
+                        .tracking(-0.3)
+                        .foregroundStyle(p.primaryText)
+                    Spacer()
+                    Text(formattedLead(pos.leadSeconds))
+                        .font(.system(size: 12))
+                        .foregroundStyle(leadSeverity(pos.leadSeconds)
+                            .map { SeverityStyle.textColor($0, isDark: p.isDark) } ?? p.captionText)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: 9).fill(p.footerPillBg))
+            .padding(.horizontal, 16)
+            .padding(.bottom, 12)
+        }
     }
 
     // MARK: Empty state
