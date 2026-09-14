@@ -43,6 +43,19 @@ Build without launching:
 bash app/build.sh --no-open
 ```
 
+### Updating the installed copy
+
+The login item launches `/Applications/Utilities/ClaudeUsageBar.app`, **not** `app/build/`. A rebuild alone won't survive a restart — the old installed copy comes back. After building, quit the app and copy the new build over the installed one:
+
+```bash
+bash app/build.sh --no-open
+osascript -e 'quit app "ClaudeUsageBar"'
+ditto app/build/ClaudeUsageBar.app /Applications/Utilities/ClaudeUsageBar.app
+open /Applications/Utilities/ClaudeUsageBar.app
+```
+
+Use `ditto` to copy over the existing bundle — moving or deleting it fails because `/Applications/Utilities` is root-owned.
+
 ---
 
 ## Tests
