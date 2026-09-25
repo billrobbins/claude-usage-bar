@@ -21,7 +21,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, Men
             button.sendAction(on: [.leftMouseUp, .rightMouseUp])
         }
         usageManager.iconDelegate = self
-        updateStatusIcon(sessionPercent: 0)
+        updateStatusIcon(sessionPercent: 0, stale: false)
 
         popover = NSPopover()
         popover.behavior = .transient
@@ -44,19 +44,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, Men
         Timer.scheduledTimer(withTimeInterval: 300, repeats: true) { [weak self] _ in
             self?.refresh()
         }
+        // Timers don't fire during sleep, so without this the popover would show
+        // pre-sleep numbers for up to five minutes after waking.
+        NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
+        ) { [weak self] _ in self?.refresh() }
     }
 
     // MARK: Actions
 
     private func refresh() {
+        // Catches staleness by age alone (e.g. after sleep) before the fetch settles.
+        if usageManager.isStale {
+            updateStatusIcon(sessionPercent: usageManager.sessionUtil, stale: true)
+        }
         usageManager.fetchUsage()
         statusManager.fetch()
     }
 
-    func updateStatusIcon(sessionPercent: Int) {
+    func updateStatusIcon(sessionPercent: Int, stale: Bool) {
         guard let button = statusItem?.button else { return }
-        button.image = sparkStatusImage(forSeverity: Severity(utilization: sessionPercent))
-        button.title = " \(sessionPercent)%"
+        if stale {
+            button.image = staleStatusImage()
+            button.attributedTitle = NSAttributedString(
+                string: " \(sessionPercent)%",
+                attributes: [.foregroundColor: NSColor.secondaryLabelColor,
+                             .font: NSFont.menuBarFont(ofSize: 0)])
+        } else {
+            button.image = sparkStatusImage(forSeverity: Severity(utilization: sessionPercent))
+            button.title = " \(sessionPercent)%"
+        }
     }
 
     @objc private func handleClick() {

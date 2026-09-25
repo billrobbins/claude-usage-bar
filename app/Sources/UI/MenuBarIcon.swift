@@ -16,3 +16,15 @@ func sparkStatusImage(forSeverity s: Severity) -> NSImage {
     image.isTemplate = false
     return image
 }
+
+/// Shown in place of the asterisk while usage can't be refreshed, so a stale percentage
+/// in the menu bar is never mistaken for a live one.
+func staleStatusImage() -> NSImage {
+    let config = NSImage.SymbolConfiguration(pointSize: 12, weight: .bold)
+        .applying(NSImage.SymbolConfiguration(paletteColors: [severityNSColor(.amber)]))
+    let base = NSImage(systemSymbolName: "exclamationmark.triangle.fill",
+                       accessibilityDescription: "Claude Usage — not updating")!
+    let image = base.withSymbolConfiguration(config) ?? base
+    image.isTemplate = false
+    return image
+}
