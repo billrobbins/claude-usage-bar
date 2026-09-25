@@ -23,8 +23,12 @@ struct PopoverView: View {
         VStack(alignment: .leading, spacing: 0) {
             header
             if usage.hasFetchedData {
-                usageRows
-                weekPositionCard
+                if isStale { staleBanner }
+                Group {
+                    usageRows
+                    weekPositionCard
+                }
+                .opacity(isStale ? 0.45 : 1)
             } else {
                 emptyState
             }
@@ -50,9 +54,9 @@ struct PopoverView: View {
                     .foregroundStyle(p.primaryText)
             }
             Spacer()
-            Text("live")
+            Text(isStale ? "stale" : "live")
                 .font(.system(size: 11, weight: .medium, design: .monospaced))
-                .foregroundStyle(p.liveText)
+                .foregroundStyle(isStale ? staleColor : p.liveText)
         }
         .padding(.horizontal, 16)
         .padding(.top, 14)
@@ -191,6 +195,50 @@ struct PopoverView: View {
         }
     }
 
+    // MARK: Stale banner
+    private var isStale: Bool {
+        usage.hasFetchedData
+            && isUsageStale(lastUpdated: usage.lastUpdated, hasError: usage.errorMessage != nil, now: now)
+    }
+
+    private var staleColor: Color { SeverityStyle.textColor(.amber, isDark: p.isDark) }
+
+    /// Explains why the numbers below are dimmed and what to do about it. A dead cookie
+    /// points at Settings; anything else (network, HTTP 5xx) just offers a retry.
+    private var staleBanner: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 11.5, weight: .semibold))
+                    .foregroundStyle(staleColor)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Usage not updating")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(p.primaryText)
+                    Text(usage.errorMessage ?? "No successful refresh in \(formattedAge(since: usage.lastUpdated, now: now).replacingOccurrences(of: " ago", with: ""))")
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(p.captionText)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            Button(action: usage.needsNewCookie ? onOpenSettings : onRefresh) {
+                Text(usage.needsNewCookie ? "Paste new cookie…" : (usage.isLoading ? "Retrying…" : "Retry"))
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(p.refreshAccent)
+                    .padding(.horizontal, 10).padding(.vertical, 4)
+                    .background(RoundedRectangle(cornerRadius: 7).fill(p.footerPillBg))
+            }
+            .buttonStyle(.plain)
+            .padding(.leading, 18)
+        }
+        .padding(.horizontal, 12).padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 9).fill(staleColor.opacity(0.12)))
+        .overlay(RoundedRectangle(cornerRadius: 9).stroke(staleColor.opacity(0.35), lineWidth: 0.5))
+        .padding(.horizontal, 16)
+        .padding(.bottom, 10)
+    }
+
     // MARK: Empty state
     private var emptyStateMessage: String {
         if let error = usage.errorMessage { return error }
@@ -274,9 +322,11 @@ struct PopoverView: View {
     // MARK: Footer
     private var footer: some View {
         HStack {
-            Text("Updated \(timeString(usage.lastUpdated))")
+            Text(isStale
+                 ? "Updated \(timeString(usage.lastUpdated)) · \(formattedAge(since: usage.lastUpdated, now: now))"
+                 : "Updated \(timeString(usage.lastUpdated))")
                 .font(.system(size: 12.5))
-                .foregroundStyle(p.faintText)
+                .foregroundStyle(isStale ? staleColor : p.faintText)
             Spacer()
             HStack(spacing: 8) {
                 statusIndicator

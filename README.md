@@ -14,6 +14,7 @@ Based on [Artzainnn/ClaudeUsageBar](https://github.com/Artzainnn/ClaudeUsageBar)
 - **Claude service status** pulled from the status page (operational / minor / major / critical)
 - **Threshold notifications** when usage crosses 25 / 50 / 75 / 90 %
 - Menu-bar asterisk color reflects current session severity at a glance
+- **Stale-data warning** — if a refresh fails (expired cookie, Cloudflare block, network) or the last good fetch is over 12 min old, the menu-bar asterisk turns into an amber ⚠, the popover dims the numbers under a "Usage not updating" banner with a *Paste new cookie…* / *Retry* button, and a one-time notification fires for cookie problems
 
 ---
 
@@ -64,7 +65,7 @@ Use `ditto` to copy over the existing bundle — moving or deleting it fails bec
 ./run-tests.sh
 ```
 
-Runs the Foundation-only Core unit tests (no simulator / Xcode required). Expected: `63/63 passed`.
+Runs the Foundation-only Core unit tests (no simulator / Xcode required). Expected: `85/85 passed`.
 
 ---
 

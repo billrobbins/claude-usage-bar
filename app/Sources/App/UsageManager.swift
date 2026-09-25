@@ -2,7 +2,7 @@ import Foundation
 import Combine
 
 protocol MenuBarIconUpdating: AnyObject {
-    func updateStatusIcon(sessionPercent: Int)
+    func updateStatusIcon(sessionPercent: Int, stale: Bool)
 }
 
 final class UsageManager: ObservableObject {
@@ -16,6 +16,9 @@ final class UsageManager: ObservableObject {
     @Published var hasFetchedData = false
     @Published var lastUpdated = Date()
     @Published var errorMessage: String?
+    /// The last failure means the cookie must be re-pasted (expired session or dead
+    /// cf_clearance), as opposed to a transient network hiccup that will clear itself.
+    @Published var needsNewCookie = false
     @Published var isLoading = false
 
     weak var iconDelegate: MenuBarIconUpdating?
@@ -34,6 +37,10 @@ final class UsageManager: ObservableObject {
     /// clearance itself is dead rather than the User-Agent being wrong. Suppresses further
     /// probing so a stale cookie doesn't fire a burst of challenges every refresh tick.
     private var probeExhausted = false
+
+    /// Set once the "cookie needs replacing" notification has fired, so a dead cookie
+    /// alerts once per outage rather than on every 5-minute refresh.
+    private var notifiedCookieProblem = false
 
     init() {
         loadCookie()
@@ -55,6 +62,7 @@ final class UsageManager: ObservableObject {
         // right now, so re-seed from that instead of trusting the previous cookie's major.
         rememberWorkingMajor(installedChromeMajor())
         probeExhausted = false
+        notifiedCookieProblem = false
     }
 
     private func rememberWorkingMajor(_ major: Int?) {
@@ -70,13 +78,17 @@ final class UsageManager: ObservableObject {
         cookie = ""
         UserDefaults.standard.removeObject(forKey: "claude_session_cookie")
         sessionUtil = 0; weeklyUtil = 0; sonnetUtil = 0
-        hasSonnet = false; hasFetchedData = false; errorMessage = nil
+        hasSonnet = false; hasFetchedData = false; errorMessage = nil; needsNewCookie = false
         sessionResetsAt = nil; weeklyResetsAt = nil; sonnetResetsAt = nil
         lastNotifiedThreshold = 0
         UserDefaults.standard.set(0, forKey: "last_notified_threshold")
         rememberWorkingMajor(nil)
-        iconDelegate?.updateStatusIcon(sessionPercent: 0)
+        iconDelegate?.updateStatusIcon(sessionPercent: 0, stale: false)
         onUpdate?()
+    }
+
+    var isStale: Bool {
+        hasFetchedData && isUsageStale(lastUpdated: lastUpdated, hasError: errorMessage != nil, now: Date())
     }
 
     // MARK: - Fetch
@@ -86,13 +98,15 @@ final class UsageManager: ObservableObject {
             DispatchQueue.main.async { self.errorMessage = "Session cookie not set" }
             return
         }
+        // The previous error stays up until this fetch settles, so a failing cookie
+        // doesn't flicker back to "fine" for the length of every retry.
         isLoading = true
-        errorMessage = nil
         resolveOrgId { [weak self] orgId in
-            guard let self = self, let orgId = orgId else {
+            guard let self = self else { return }
+            guard let orgId = orgId else {
                 DispatchQueue.main.async {
-                    self?.isLoading = false
-                    self?.errorMessage = "Could not get org id from cookie"
+                    self.isLoading = false
+                    self.fail("Could not get org id from cookie", needsNewCookie: true)
                 }
                 return
             }
@@ -126,7 +140,7 @@ final class UsageManager: ObservableObject {
                 self.isLoading = false
                 switch result {
                 case .success(let data): self.apply(data)
-                case .failure(let reason): self.errorMessage = reason.message
+                case .failure(let reason): self.fail(reason.message, needsNewCookie: reason.needsNewCookie)
                 }
             }
         }
@@ -146,6 +160,13 @@ final class UsageManager: ObservableObject {
             case .challenge: return "Blocked by Cloudflare — re-copy your cookie from Chrome"
             case .unauthorized: return "Session expired — paste a fresh cookie"
             case .http(let code): return "HTTP \(code)"
+            }
+        }
+
+        var needsNewCookie: Bool {
+            switch self {
+            case .challenge, .unauthorized: return true
+            case .network, .http: return false
             }
         }
     }
@@ -204,8 +225,22 @@ final class UsageManager: ObservableObject {
         }.resume()
     }
 
+    /// Records a failed fetch. The last good numbers stay on screen, but the popover and
+    /// menu-bar icon flip to a stale state so they aren't mistaken for current usage.
+    private func fail(_ message: String, needsNewCookie: Bool) {
+        errorMessage = message
+        self.needsNewCookie = needsNewCookie
+        iconDelegate?.updateStatusIcon(sessionPercent: sessionUtil, stale: true)
+        if needsNewCookie && !notifiedCookieProblem {
+            notifiedCookieProblem = true
+            NotificationService.send(title: "Claude Usage isn't updating",
+                                     body: "\(message). The numbers shown are out of date.")
+        }
+        onUpdate?()
+    }
+
     private func apply(_ data: Data) {
-        guard let parsed = try? parseUsage(data) else { errorMessage = "Parse error"; return }
+        guard let parsed = try? parseUsage(data) else { fail("Parse error", needsNewCookie: false); return }
         if let s = parsed.session { sessionUtil = s.utilization; sessionResetsAt = s.resetsAt }
         if let w = parsed.weekly { weeklyUtil = w.utilization; weeklyResetsAt = w.resetsAt }
         if let so = parsed.sonnet { hasSonnet = true; sonnetUtil = so.utilization; sonnetResetsAt = so.resetsAt }
@@ -213,7 +248,9 @@ final class UsageManager: ObservableObject {
         lastUpdated = Date()
         hasFetchedData = true
         errorMessage = nil
-        iconDelegate?.updateStatusIcon(sessionPercent: sessionUtil)
+        needsNewCookie = false
+        notifiedCookieProblem = false
+        iconDelegate?.updateStatusIcon(sessionPercent: sessionUtil, stale: false)
         fireThresholdNotifications()
         onUpdate?()
     }
