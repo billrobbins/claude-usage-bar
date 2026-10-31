@@ -13,7 +13,8 @@ Based on [Artzainnn/ClaudeUsageBar](https://github.com/Artzainnn/ClaudeUsageBar)
 - **Pace vs. time** — a tick on each meter marks how much of the window has elapsed, with a caption like `26% of week elapsed · 1.3× pace`; the pace figure turns amber at ≥ 1.25× and red at ≥ 2×
 - **Claude service status** pulled from the status page (operational / minor / major / critical)
 - **Threshold notifications** when usage crosses 25 / 50 / 75 / 90 %
-- Menu-bar asterisk color reflects current session severity at a glance
+- **Menu bar** shows weekly usage; the asterisk is red when usage runs ahead of an even spend of the week, amber when within 5 points of it, green when comfortably behind
+- **Ultra plans** (no 5-hour limit) hide the Session meter automatically; threshold notifications switch to the weekly limit
 - **Stale-data warning** — if a refresh fails (expired cookie, Cloudflare block, network) or the last good fetch is over 12 min old, the menu-bar asterisk turns into an amber ⚠, the popover dims the numbers under a "Usage not updating" banner with a *Paste new cookie…* / *Retry* button, and a one-time notification fires for cookie problems
 
 ---
@@ -65,7 +66,7 @@ Use `ditto` to copy over the existing bundle — moving or deleting it fails bec
 ./run-tests.sh
 ```
 
-Runs the Foundation-only Core unit tests (no simulator / Xcode required). Expected: `85/85 passed`.
+Runs the Foundation-only Core unit tests (no simulator / Xcode required). Expected: `92/92 passed`.
 
 ---
 

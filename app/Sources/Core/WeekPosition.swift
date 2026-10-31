@@ -35,9 +35,3 @@ func formattedLead(_ leadSeconds: Double) -> String {
     let span = hours > 0 ? (minutes > 0 ? "\(hours)h \(minutes)m" : "\(hours)h") : "\(minutes)m"
     return leadSeconds > 0 ? "\(span) ahead" : "\(span) behind"
 }
-
-/// Red when usage runs ahead of the clock, green when it lags behind, nil within 5 minutes.
-func leadSeverity(_ leadSeconds: Double) -> Severity? {
-    if abs(leadSeconds) < 5 * 60 { return nil }
-    return leadSeconds > 0 ? .red : .green
-}

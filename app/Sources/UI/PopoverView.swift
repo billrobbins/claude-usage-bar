@@ -66,9 +66,11 @@ struct PopoverView: View {
     // MARK: Usage rows
     private var usageRows: some View {
         VStack(alignment: .leading, spacing: 0) {
-            usageRow(title: "Session", pill: "5h", util: usage.sessionUtil,
-                     resets: usage.sessionResetsAt, includeDate: false,
-                     window: UsageWindow.session, noun: "session")
+            if usage.hasSession {
+                usageRow(title: "Session", pill: "5h", util: usage.sessionUtil,
+                         resets: usage.sessionResetsAt, includeDate: false,
+                         window: UsageWindow.session, noun: "session")
+            }
             usageRow(title: "Weekly", pill: "7d", util: usage.weeklyUtil,
                      resets: usage.weeklyResetsAt, includeDate: true,
                      window: UsageWindow.weekly, noun: "week", lastRow: !usage.hasSonnet)
@@ -163,7 +165,7 @@ struct PopoverView: View {
     // MARK: Week position
     /// Translates the weekly percentage into a clock time inside the reset window, so
     /// "93% of the week" reads as "you've spent the week up to Friday 6:14 AM". The lead
-    /// is red when usage runs ahead of the clock, green when it lags behind.
+    /// takes the same color as the menu-bar asterisk.
     @ViewBuilder
     private var weekPositionCard: some View {
         if let pos = windowPosition(utilization: usage.weeklyUtil,
@@ -182,8 +184,10 @@ struct PopoverView: View {
                     Spacer()
                     Text(formattedLead(pos.leadSeconds))
                         .font(.system(size: 12))
-                        .foregroundStyle(leadSeverity(pos.leadSeconds)
-                            .map { SeverityStyle.textColor($0, isDark: p.isDark) } ?? p.captionText)
+                        .foregroundStyle(SeverityStyle.textColor(
+                            weeklyBudgetSeverity(utilization: usage.weeklyUtil,
+                                                 resetsAt: usage.weeklyResetsAt, now: now),
+                            isDark: p.isDark))
                 }
             }
             .padding(.horizontal, 12)

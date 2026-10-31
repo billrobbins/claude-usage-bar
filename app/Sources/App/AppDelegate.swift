@@ -21,7 +21,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, Men
             button.sendAction(on: [.leftMouseUp, .rightMouseUp])
         }
         usageManager.iconDelegate = self
-        updateStatusIcon(sessionPercent: 0, stale: false)
+        updateStatusIcon(stale: false)
 
         popover = NSPopover()
         popover.behavior = .transient
@@ -56,23 +56,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, Men
     private func refresh() {
         // Catches staleness by age alone (e.g. after sleep) before the fetch settles.
         if usageManager.isStale {
-            updateStatusIcon(sessionPercent: usageManager.sessionUtil, stale: true)
+            updateStatusIcon(stale: true)
         }
         usageManager.fetchUsage()
         statusManager.fetch()
     }
 
-    func updateStatusIcon(sessionPercent: Int, stale: Bool) {
+    /// Shows weekly usage, colored by how far it runs ahead of or behind an even spend
+    /// of the week rather than by raw percentage (which only ever climbs toward red).
+    func updateStatusIcon(stale: Bool) {
         guard let button = statusItem?.button else { return }
+        let percent = usageManager.weeklyUtil
         if stale {
             button.image = staleStatusImage()
             button.attributedTitle = NSAttributedString(
-                string: " \(sessionPercent)%",
+                string: " \(percent)%",
                 attributes: [.foregroundColor: NSColor.secondaryLabelColor,
                              .font: NSFont.menuBarFont(ofSize: 0)])
         } else {
-            button.image = sparkStatusImage(forSeverity: Severity(utilization: sessionPercent))
-            button.title = " \(sessionPercent)%"
+            let severity = weeklyBudgetSeverity(utilization: percent,
+                                                resetsAt: usageManager.weeklyResetsAt, now: Date())
+            button.image = sparkStatusImage(forSeverity: severity)
+            button.title = " \(percent)%"
         }
     }
 
@@ -133,7 +138,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, Men
         let snapshot = UsageSnapshot(
             session: LimitSnapshot(utilization: usageManager.sessionUtil,
                                    resetsAt: usageManager.sessionResetsAt,
-                                   hasData: usageManager.hasFetchedData),
+                                   hasData: usageManager.hasFetchedData && usageManager.hasSession),
             weekly: LimitSnapshot(utilization: usageManager.weeklyUtil,
                                   resetsAt: usageManager.weeklyResetsAt,
                                   hasData: usageManager.hasFetchedData),
