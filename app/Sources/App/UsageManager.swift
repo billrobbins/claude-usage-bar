@@ -2,13 +2,15 @@ import Foundation
 import Combine
 
 protocol MenuBarIconUpdating: AnyObject {
-    func updateStatusIcon(sessionPercent: Int, stale: Bool)
+    func updateStatusIcon(stale: Bool)
 }
 
 final class UsageManager: ObservableObject {
     @Published var sessionUtil = 0
     @Published var weeklyUtil = 0
     @Published var sonnetUtil = 0
+    /// False once the API stops reporting a 5-hour window (Ultra has no session limit).
+    @Published var hasSession = true
     @Published var hasSonnet = false
     @Published var sessionResetsAt: Date?
     @Published var weeklyResetsAt: Date?
@@ -78,12 +80,12 @@ final class UsageManager: ObservableObject {
         cookie = ""
         UserDefaults.standard.removeObject(forKey: "claude_session_cookie")
         sessionUtil = 0; weeklyUtil = 0; sonnetUtil = 0
-        hasSonnet = false; hasFetchedData = false; errorMessage = nil; needsNewCookie = false
+        hasSonnet = false; hasSession = true; hasFetchedData = false; errorMessage = nil; needsNewCookie = false
         sessionResetsAt = nil; weeklyResetsAt = nil; sonnetResetsAt = nil
         lastNotifiedThreshold = 0
         UserDefaults.standard.set(0, forKey: "last_notified_threshold")
         rememberWorkingMajor(nil)
-        iconDelegate?.updateStatusIcon(sessionPercent: 0, stale: false)
+        iconDelegate?.updateStatusIcon(stale: false)
         onUpdate?()
     }
 
@@ -230,7 +232,7 @@ final class UsageManager: ObservableObject {
     private func fail(_ message: String, needsNewCookie: Bool) {
         errorMessage = message
         self.needsNewCookie = needsNewCookie
-        iconDelegate?.updateStatusIcon(sessionPercent: sessionUtil, stale: true)
+        iconDelegate?.updateStatusIcon(stale: true)
         if needsNewCookie && !notifiedCookieProblem {
             notifiedCookieProblem = true
             NotificationService.send(title: "Claude Usage isn't updating",
@@ -241,7 +243,8 @@ final class UsageManager: ObservableObject {
 
     private func apply(_ data: Data) {
         guard let parsed = try? parseUsage(data) else { fail("Parse error", needsNewCookie: false); return }
-        if let s = parsed.session { sessionUtil = s.utilization; sessionResetsAt = s.resetsAt }
+        if let s = parsed.session { hasSession = true; sessionUtil = s.utilization; sessionResetsAt = s.resetsAt }
+        else { hasSession = false; sessionUtil = 0; sessionResetsAt = nil }
         if let w = parsed.weekly { weeklyUtil = w.utilization; weeklyResetsAt = w.resetsAt }
         if let so = parsed.sonnet { hasSonnet = true; sonnetUtil = so.utilization; sonnetResetsAt = so.resetsAt }
         else { hasSonnet = false }
@@ -250,7 +253,7 @@ final class UsageManager: ObservableObject {
         errorMessage = nil
         needsNewCookie = false
         notifiedCookieProblem = false
-        iconDelegate?.updateStatusIcon(sessionPercent: sessionUtil, stale: false)
+        iconDelegate?.updateStatusIcon(stale: false)
         fireThresholdNotifications()
         onUpdate?()
     }
@@ -258,10 +261,13 @@ final class UsageManager: ObservableObject {
     private func fireThresholdNotifications() {
         guard UserDefaults.standard.object(forKey: usageNotificationsKey) == nil
                 || UserDefaults.standard.bool(forKey: usageNotificationsKey) else { return }
-        let result = thresholdUpdate(percentage: sessionUtil, lastNotified: lastNotifiedThreshold)
+        // Without a session limit, the weekly limit is the one worth alerting on.
+        let percent = hasSession ? sessionUtil : weeklyUtil
+        let limitName = hasSession ? "5-hour session limit" : "weekly limit"
+        let result = thresholdUpdate(percentage: percent, lastNotified: lastNotifiedThreshold)
         for t in result.toFire {
             NotificationService.send(title: "Claude Usage Alert",
-                                     body: "You've reached \(sessionUtil)% of your 5-hour session limit")
+                                     body: "You've reached \(percent)% of your \(limitName)")
             _ = t
         }
         lastNotifiedThreshold = result.newLastNotified

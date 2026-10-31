@@ -22,4 +22,13 @@ func testUsageParsing() {
     """.data(using: .utf8)!
     let u2 = try! parseUsage(noSonnet)
     T.ok(u2.sonnet == nil, "no sonnet key -> nil")
+
+    // Ultra plans have no 5-hour limit
+    let noSession = """
+    { "five_hour": null,
+      "seven_day": { "utilization": 10, "resets_at": "2026-06-26T22:00:00Z" } }
+    """.data(using: .utf8)!
+    let u3 = try! parseUsage(noSession)
+    T.ok(u3.session == nil, "null five_hour -> nil")
+    T.eq(u3.weekly?.utilization, 10, "weekly still parsed without session")
 }

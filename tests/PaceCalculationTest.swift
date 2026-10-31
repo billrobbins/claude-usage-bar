@@ -44,4 +44,14 @@ func testPaceCalculation() {
     T.eq(formattedPace(9.94), "9.9×", "just under cap")
     T.eq(formattedPace(9.95), "9.9×+", "cap boundary")
     T.eq(formattedPace(47.0), "9.9×+", "way over cap")
+
+    // Weekly budget severity: 40% of the week elapsed
+    let budgetResets = now.addingTimeInterval(UsageWindow.weekly * 0.6)
+    func budget(_ u: Int) -> Severity { weeklyBudgetSeverity(utilization: u, resetsAt: budgetResets, now: now) }
+    T.eq(budget(41), .red, "over the clock → red")
+    T.eq(budget(40), .amber, "on the clock → amber")
+    T.eq(budget(35), .amber, "5 points behind → amber")
+    T.eq(budget(34), .green, "more than 5 behind → green")
+    T.eq(weeklyBudgetSeverity(utilization: 95, resetsAt: nil, now: now), .red,
+         "no reset date → utilization severity")
 }

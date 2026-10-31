@@ -66,9 +66,11 @@ struct PopoverView: View {
     // MARK: Usage rows
     private var usageRows: some View {
         VStack(alignment: .leading, spacing: 0) {
-            usageRow(title: "Session", pill: "5h", util: usage.sessionUtil,
-                     resets: usage.sessionResetsAt, includeDate: false,
-                     window: UsageWindow.session, noun: "session")
+            if usage.hasSession {
+                usageRow(title: "Session", pill: "5h", util: usage.sessionUtil,
+                         resets: usage.sessionResetsAt, includeDate: false,
+                         window: UsageWindow.session, noun: "session")
+            }
             usageRow(title: "Weekly", pill: "7d", util: usage.weeklyUtil,
                      resets: usage.weeklyResetsAt, includeDate: true,
                      window: UsageWindow.weekly, noun: "week", lastRow: !usage.hasSonnet)

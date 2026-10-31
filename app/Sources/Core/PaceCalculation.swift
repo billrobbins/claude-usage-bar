@@ -29,3 +29,18 @@ func paceSeverity(_ ratio: Double?) -> Severity? {
 func formattedPace(_ ratio: Double) -> String {
     ratio >= 9.95 ? "9.9×+" : String(format: "%.1f×", ratio)
 }
+
+/// Menu-bar color: how far weekly usage sits from an even spend of the week, in
+/// percentage points. Red once usage runs past the clock, amber within `closeMargin`
+/// points of it, green further behind. Without a reset date there is no clock to compare
+/// against, so it falls back to plain utilization severity.
+func weeklyBudgetSeverity(utilization: Int, resetsAt: Date?, now: Date,
+                          closeMargin: Double = 5) -> Severity {
+    guard let resetsAt = resetsAt else { return Severity(utilization: utilization) }
+    let start = resetsAt.addingTimeInterval(-UsageWindow.weekly)
+    let elapsed = min(1.0, max(0.0, now.timeIntervalSince(start) / UsageWindow.weekly)) * 100
+    let lead = Double(utilization) - elapsed
+    if lead > 0 { return .red }
+    if lead >= -closeMargin { return .amber }
+    return .green
+}
